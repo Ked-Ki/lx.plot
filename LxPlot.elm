@@ -23,24 +23,25 @@ import Debug
 -- All positions are in inches. Use the "ft" utility function to get inches from
 -- feet and inches representation.
 
+-- Symbol is used as a Tag for the Diagram rendering
 type Symbol = HP String
             | F Int
             | P -- Whole plot
 
--- type for hanging position
+-- type for hanging position (pipes)
 type alias HangingPosition = { position : Int    -- position of the center of the pipe
                              , length   : Int    -- total length of the pipe
                              -- could add height, left-right
                              }
 
--- type for fixture
+-- type for fixture (lights)
 type FixtureType = ERS | PAR | Fresnel
 type alias Fixture = { position   : String
                      , distance   : Int              -- distance from center of hanging position (+right, -left)
                      , instrument : FixtureType
                      , channel    : Int
                      , dimmer     : Int
-                     -- add channel #, dimmer #, unit number, etc.
+                     -- could add unit number, gel, etc.
                      }
 
 fixtureTypes = [ERS, PAR, Fresnel]
@@ -48,6 +49,7 @@ fixtureTypes = [ERS, PAR, Fresnel]
 -- type for plot
 type alias Plot = {architecture : Dict.Dict String HangingPosition, fixtures : Dict.Dict Int Fixture}
 initPlot = { architecture = theaterEast, fixtures = Dict.empty}
+--initPlot = {architecture = theaterEast, fixtures = tops}
 
 type alias Options = { plasterLine : Bool
                      , centerLine  : Bool
@@ -59,6 +61,8 @@ type alias Options = { plasterLine : Bool
                      }
 
 initOptions = { plasterLine = True, centerLine = True, zoom = 1, offset = (0,0), nextLight = 1, nextChannel = 1, nextDimmer = 1}
+--initOptions = { plasterLine = True, centerLine = True, zoom = 1, offset=(0,0), nextLight = 9, nextChannel = 19, nextDimmer = 109}
+ 
 
 type alias Model = { options : Options, plot : Plot }
 initModel = { options = initOptions, plot = initPlot }
@@ -66,6 +70,7 @@ initModel = { options = initOptions, plot = initPlot }
 type Tool = Insert FixtureType
           | Delete
           | MovePan
+
 type alias ModelAndDrag = { model : Model, dragState : Maybe DraggingState, tool : Tool}
 initModelAndDrag = { model = initModel, dragState = Nothing, tool = MovePan}
 
@@ -427,14 +432,16 @@ viewPosition opt (label,{position, length}) =
     toPix = toPixels zoom
     pipe = D.tag (HP label)
            <| D.rect (toPix length) (toPix 2) (D.justStroke GC.defaultLine)
+
+    pipeWithLbl = D.hcat [pipe, D.hspace 20, D.text (" " ++ label) T.defaultStyle]
     center = D.empty
   in 
-    if | position > 0 -> vcat'  [ pipe 
+    if | position > 0 -> vcat'  [ pipeWithLbl
                                 , D.vspace (toPix position)
                                 , center]
        | otherwise    -> D.vcat [ center
                                 , D.vspace (toPix (abs position))
-                                , pipe]
+                                , pipeWithLbl]
 
 centerLineCheck : S.Channel Bool
 centerLineCheck = S.channel True
@@ -476,10 +483,12 @@ viewToolbar s (w,h) nC nD =
       createFixture ft = let sym = GC.collage 45 45 
                                    [D.render 
                                    <| viewLight {opt | zoom <- 2} False (opt.nextLight,{instrument=ft})]
-                         in GI.customButton (S.send toolSelect (Insert ft)) 
+                         in GE.flow GE.down 
+                            [ (GI.customButton (S.send toolSelect (Insert ft)) 
                                             (but sym Color.lightGray)
                                             (but sym Color.lightGreen)
-                                            (but sym Color.gray)
+                                            (but sym Color.gray))
+                            , T.plainText (toString ft)]
 
       deleteFixture = let sym = GE.image 45 45 "assets/Cancel.png"
                       in GI.customButton (S.send toolSelect Delete) 
@@ -584,12 +593,20 @@ theaterEast = Dict.fromList [foh4, foh3, foh2, foh1, elec1, elec2, elec3]
 
 
 tops = Dict.fromList <|
-       [ (1,{position = "1 Elec", distance =  (9 `ft` 0), instrument = PAR})
-       , (2,{position = "1 Elec", distance =  (3 `ft` 0), instrument = PAR})
-       , (3,{position = "1 Elec", distance = -(3 `ft` 0), instrument = PAR})
-       , (4,{position = "1 Elec", distance = -(9 `ft` 0), instrument = PAR})
-       , (5,{position = "2 Elec", distance =  (9 `ft` 0), instrument = PAR})
-       , (6,{position = "2 Elec", distance =  (3 `ft` 0), instrument = PAR})
-       , (7,{position = "2 Elec", distance = -(3 `ft` 0), instrument = PAR})
-       , (8,{position = "2 Elec", distance = -(9 `ft` 0), instrument = PAR})
+       [ (1,{position = "1 Elec", distance =  (9 `ft` 0), instrument = PAR,
+       channel = 11, dimmer = 101})
+       , (2,{position = "1 Elec", distance =  (3 `ft` 0), instrument = PAR,
+       channel = 12, dimmer = 102})
+       , (3,{position = "1 Elec", distance = -(3 `ft` 0), instrument = PAR,
+       channel = 13, dimmer = 103})
+       , (4,{position = "1 Elec", distance = -(9 `ft` 0), instrument = PAR,
+       channel = 14, dimmer = 104})
+       , (5,{position = "2 Elec", distance =  (9 `ft` 0), instrument = PAR,
+       channel = 15, dimmer = 105})
+       , (6,{position = "2 Elec", distance =  (3 `ft` 0), instrument = PAR,
+       channel = 16, dimmer = 106})
+       , (7,{position = "2 Elec", distance = -(3 `ft` 0), instrument = PAR,
+       channel = 17, dimmer = 107})
+       , (8,{position = "2 Elec", distance = -(9 `ft` 0), instrument = PAR,
+       channel = 18, dimmer = 108})
        ]
