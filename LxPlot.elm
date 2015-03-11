@@ -1,4 +1,4 @@
-module LightPlot where
+module LxPlot where
 
 import Diagrams as D
 import Graphics.Collage as GC
