@@ -264,8 +264,8 @@ upstate (evt,p) s =
   case evt of
     ChangeChannel str -> updateChannel s str
     ChangeDimmer str -> updateDimmer s str
-    CL -> updateCL s p
-    PL -> updatePL s p
+    CL -> updateCL s
+    PL -> updatePL s
     ZoomIn  -> updateZoom  0.25 s
     ZoomOut -> updateZoom -0.25 s
     ZoomNone -> s
@@ -302,49 +302,44 @@ upstate (evt,p) s =
                                      in updateModel s newModel
                       _ -> s
 
-updateCL : State -> D.Point -> State
-updateCL s p = 
+getOptions : State -> Options
+getOptions s = s.modelAndDrag.model.options
+
+updateOptions : State -> Options -> State
+updateOptions s newOpt =
   let maD = s.modelAndDrag
       model = maD.model
-      opt = model.options
-      newOpt = {opt | centerLine <- (not opt.centerLine)}
       newModel = {model | options <- newOpt}
       newMaD = { maD | model <- newModel}
   in {s | modelAndDrag <- newMaD
         , diagram <- view newMaD }
 
-updatePL : State -> D.Point -> State
-updatePL s p = 
-  let maD = s.modelAndDrag
-      model = maD.model
-      opt = model.options
-      newOpt = {opt | plasterLine <- (not opt.plasterLine)}
-      newModel = {model | options <- newOpt}
-      newMaD = { maD | model <- newModel}
-  in {s | modelAndDrag <- newMaD
-        , diagram <- view newMaD }
+updateCL : State -> State
+updateCL s = 
+  let opt = getOptions s
+      newOpt = {opt | centerLine <- (not opt.centerLine)}
+  in  updateOptions s newOpt
+    
+
+updatePL : State -> State
+updatePL s = 
+  let opt = getOptions s
+      newOpt = {opt | centerLine <- (not opt.plasterLine)}
+  in  updateOptions s newOpt
 
 updateChannel : State -> String -> State
 updateChannel s str = case (String.toInt str) of
   Err _ -> s
-  Ok i -> let maD = s.modelAndDrag
-              model = maD.model
-              opt = model.options
+  Ok i -> let opt = getOptions s
               newOpt = {opt | nextChannel <- i}
-              newModel = {model | options <- newOpt}
-              newMaD = { maD | model <- newModel}
-          in {s | modelAndDrag <- newMaD }
+          in  updateOptions s newOpt
 
 updateDimmer : State -> String -> State
 updateDimmer s str = case (String.toInt str) of
   Err _ -> s
-  Ok i -> let maD = s.modelAndDrag
-              model = maD.model
-              opt = model.options
+  Ok i -> let opt = getOptions s
               newOpt = {opt | nextDimmer <- i}
-              newModel = {model | options <- newOpt}
-              newMaD = { maD | model <- newModel}
-          in {s | modelAndDrag <- newMaD }
+          in  updateOptions s newOpt
 
 state : Signal State
 state = S.foldp upstate initState events
@@ -404,6 +399,7 @@ viewFixture opt architecture new (label, {position, distance, instrument, channe
     zoom = opt.zoom
     toPix = toPixels zoom
     center = D.empty
+    defStyle = T.defaultStyle
     scaledStyle = {defStyle | height <- Just (max (toPix 4) 12) }
     light = viewLight opt new (label, {instrument=instrument})
     channelLbl = D.text (toString channel) scaledStyle `D.atop`
@@ -452,10 +448,10 @@ toolSelect : S.Channel Tool
 toolSelect = S.channel MovePan
 
 channelNum : S.Channel GF.Content
-channelNum = S.channel {string= "1", selection = GF.Selection 0 0 GF.Forward}
+channelNum = S.channel {string= "1", selection = GF.Selection 1 1 GF.Forward}
 
 dimmerNum : S.Channel GF.Content
-dimmerNum = S.channel {string= "1", selection = GF.Selection 0 0 GF.Forward}
+dimmerNum = S.channel {string= "1", selection = GF.Selection 1 1 GF.Forward}
 
 viewToolbar : State -> (Int, Int) -> GF.Content -> GF.Content -> GE.Element
 viewToolbar s (w,h) nC nD = 
@@ -511,17 +507,18 @@ viewToolbar s (w,h) nC nD =
                       Delete -> deleteFixture
                       MovePan -> pan
       
-      outline e = GE.color Color.black 
-                  <| GE.container tw ((GE.heightOf e)+2) GE.middle 
-                  <| GE.color Color.lightGray 
-                  <| GE.container (tw-2) (GE.heightOf e) GE.midLeft e
-
-      title str = [GE.spacer 0 20
-                  , outline <| GE.flow GE.right [GE.spacer 5 5, T.plainText str]
-                  , GE.spacer 0 10]
-
-      channelField = GF.field GF.defaultStyle (S.send channelNum) "Channel #:" nC
-      dimmerField = GF.field GF.defaultStyle (S.send dimmerNum) "Dimmer #:" nD
+      defTextStyle = T.defaultStyle
+      scaledTextStyle = {defTextStyle | height <- Just 12 }
+      defFieldStyle = GF.defaultStyle
+      scaledFieldStyle = {defFieldStyle | style <- scaledTextStyle }
+      channelField = GE.beside 
+                       (T.fromString "Channel #: " |> T.leftAligned 
+                        |> GE.container 80 28 GE.midLeft)
+                       (GF.field scaledFieldStyle (S.send channelNum) "Channel #:" nC)
+      dimmerField = GE.beside 
+                       (T.fromString "Dimmer #: " |> T.leftAligned
+                        |> GE.container 80 28 GE.midLeft)
+                       (GF.field scaledFieldStyle (S.send dimmerNum) "Dimmer #:" nD)
 
       appName = T.fromString "lx.plot" |> T.height 24 
                                        |> T.bold 
@@ -543,9 +540,19 @@ viewToolbar s (w,h) nC nD =
                         |> T.leftAligned
                         |> outline
                              
-      zoomInstructions = T.fromString "To zoom, use up and down arrow keys (or WASD)." 
-                         |> T.leftAligned
-                         |> GE.width tw
+      zoomInstructions = "To zoom, use up and down arrow keys (or WASD)." 
+
+      outline e = GE.color Color.black 
+                  <| GE.container tw ((GE.heightOf e)+2) GE.middle 
+                  <| GE.color Color.lightGray 
+                  <| GE.container (tw-2) (GE.heightOf e) GE.midLeft e
+
+      title str = [GE.spacer 0 20
+                  , outline <| tab 5 <| GE.width tw 
+                            <| T.leftAligned <| T.fromString str
+                  , GE.spacer 0 10]
+
+      tab i e = GE.flow GE.right [GE.spacer i i , e]
 
   in
      GE.layers [ bg
@@ -561,16 +568,15 @@ viewToolbar s (w,h) nC nD =
                            <| (::) GE.empty
                            <| L.map createFixture fixtureTypes]
                       , title "Delete Fixtures:"
-                      , [GE.flow GE.right [GE.empty, GE.spacer 10 10, deleteFixture]]
+                      , [tab 10 deleteFixture]
                       , title "Move Fixtures/Pan Plot:"
-                      , [GE.flow GE.right [GE.empty, GE.spacer 10 10, pan]]
+                      , [tab 10 pan]
                       , title "Current Tool:"
-                      , [GE.flow GE.right [GE.empty, GE.spacer 10 10, currentTool]]
+                      , [tab 10 currentTool]
                       , title "Next Fixture:"
-                      , [channelField]
-                      , [dimmerField]
-                      , [GE.spacer 0 20]
-                      , [outline zoomInstructions]
+                      , [tab 5 channelField]
+                      , [tab 5 dimmerField]
+                      , title zoomInstructions
                       ]
                ]
 
@@ -589,8 +595,6 @@ main = S.map4 render state Window.dimensions (S.subscribe channelNum) (S.subscri
 -- ft converts from feet and inches to inches
 ft : Int -> Int -> Int
 ft f i = (f * 12) + i
-
-defStyle = T.defaultStyle
 
 -- Rewritten versions of D.vcat and D.above so that the origin is on the bottom
 -- element.
