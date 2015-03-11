@@ -404,8 +404,7 @@ viewFixture opt architecture new (label, {position, distance, instrument, channe
     zoom = opt.zoom
     toPix = toPixels zoom
     center = D.empty
-    defStyle = T.defaultStyle
-    scaledStyle = {defStyle | height <- Just (toPix 4)}
+    scaledStyle = {defStyle | height <- Just (max (toPix 4) 12) }
     light = viewLight opt new (label, {instrument=instrument})
     channelLbl = D.text (toString channel) scaledStyle `D.atop`
       D.circle (toPix 4) (D.fillAndStroke (GC.Solid Color.white) GC.defaultLine)
@@ -462,16 +461,21 @@ viewToolbar : State -> (Int, Int) -> GF.Content -> GF.Content -> GE.Element
 viewToolbar s (w,h) nC nD = 
   let tw = (w//5)
       opt = s.modelAndDrag.model.options
-      bg = GE.color Color.lightBlue
-           <| GE.spacer tw h 
+      bg = GE.layers [ GE.color Color.black     <| GE.spacer (tw  ) h
+                     , GE.color Color.lightBlue 
+                       <| GE.container (tw-1) h GE.bottomLeft footer ]
       clCheckbox = GE.flow GE.right <| L.intersperse (GE.spacer 5 5)
                    [ GE.empty 
-                   , GI.checkbox (S.send centerLineCheck) opt.centerLine
+                   , GE.above 
+                      (GE.spacer 0 1)
+                      (GI.checkbox (S.send centerLineCheck) opt.centerLine)
                    , T.plainText "Center Line visible?"
                    ]
       plCheckbox = GE.flow GE.right <| L.intersperse (GE.spacer 5 5)
                    [ GE.empty
-                   , GI.checkbox (S.send plasterLineCheck) opt.plasterLine
+                   , GE.above 
+                      (GE.spacer 0 1)
+                      (GI.checkbox (S.send plasterLineCheck) opt.plasterLine)
                    , T.plainText "Plaster Line visible?"
                    ]
 
@@ -508,9 +512,9 @@ viewToolbar s (w,h) nC nD =
                       MovePan -> pan
       
       outline e = GE.color Color.black 
-                  <| GE.container tw 20 GE.middle 
+                  <| GE.container tw ((GE.heightOf e)+2) GE.middle 
                   <| GE.color Color.lightGray 
-                  <| GE.container (tw-2) 18 GE.midLeft e
+                  <| GE.container (tw-2) (GE.heightOf e) GE.midLeft e
 
       title str = [GE.spacer 0 20
                   , outline <| GE.flow GE.right [GE.spacer 5 5, T.plainText str]
@@ -519,11 +523,37 @@ viewToolbar s (w,h) nC nD =
       channelField = GF.field GF.defaultStyle (S.send channelNum) "Channel #:" nC
       dimmerField = GF.field GF.defaultStyle (S.send dimmerNum) "Dimmer #:" nD
 
+      appName = T.fromString "lx.plot" |> T.height 24 
+                                       |> T.bold 
+                                       |> T.centered
+                                       |> GE.width tw
+                                       |> outline
+
+      footer = T.concat [ T.fromString "By "
+                        , T.link "http://kedki.me"
+                                 (T.fromString "Kevin Freese")
+                        , T.fromString "\nWritten in "
+                        , T.link "http://elm-lang.org" 
+                                 (T.fromString "Elm")
+                        , T.fromString " and is "
+                        , T.link "https://github.com/Ked-Ki/lx.plot" 
+                                 (T.fromString "open source")
+                        , T.fromString "."
+                        ]
+                        |> T.leftAligned
+                        |> outline
+                             
+      zoomInstructions = T.fromString "To zoom, use up and down arrow keys (or WASD)." 
+                         |> T.leftAligned
+                         |> GE.width tw
+
   in
      GE.layers [ bg
                , GE.flow GE.down 
                   <| L.concat
                       [ [GE.spacer 0 20]
+                      , [appName]
+                      , [GE.spacer 0 20]
                       , L.map outline [clCheckbox, plCheckbox]
                       , title "Create Fixtures:"
                       , [GE.flow GE.right 
@@ -539,6 +569,8 @@ viewToolbar s (w,h) nC nD =
                       , title "Next Fixture:"
                       , [channelField]
                       , [dimmerField]
+                      , [GE.spacer 0 20]
+                      , [outline zoomInstructions]
                       ]
                ]
 
@@ -557,6 +589,8 @@ main = S.map4 render state Window.dimensions (S.subscribe channelNum) (S.subscri
 -- ft converts from feet and inches to inches
 ft : Int -> Int -> Int
 ft f i = (f * 12) + i
+
+defStyle = T.defaultStyle
 
 -- Rewritten versions of D.vcat and D.above so that the origin is on the bottom
 -- element.
